@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>축제 POS 테스트</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+      background: #f5f5f5;
+    }
+    h1 { margin-top: 0; }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .top-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    button {
+      cursor: pointer;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      padding: 8px 12px;
+      background: #fff;
+      font-size: 0.95rem;
+    }
+    button.primary {
+      background: #007bff;
+      color: #fff;
+      border-color: #007bff;
+    }
+    button.danger {
+      background: #dc3545;
+      color: #fff;
+      border-color: #dc3545;
+    }
+    .status {
+      margin: 8px 0 16px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: #fff;
+      border: 1px solid #ddd;
+      font-size: 0.9rem;
+    }
+    .orders-list {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      padding: 8px 12px;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+    .order-card {
+      border-bottom: 1px solid #eee;
+      padding: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .order-info {
+      font-size: 0.9rem;
+    }
+    .order-number {
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .display-numbers {
+      font-size: 2rem;
+      font-weight: 700;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>축제 POS 시스템 (기본 테스트)</h1>
+
+  <!-- 첫 화면: 역할 선택 -->
+  <div id="view-home" class="view active">
+    <p>사용할 모드를 선택하세요.</p>
+    <div class="top-buttons">
+      <button id="btn-go-pos" class="primary">주문 받기 (중앙 POS)</button>
+      <button id="btn-go-kitchen">주문 확인하기 (주방)</button>
+      <button id="btn-go-display">번호판 보기 (손님용)</button>
+    </div>
+  </div>
+
+  <!-- 주문 받기(중앙 POS) 화면: 여기에서만 장사 시작/종료 가능 -->
+  <div id="view-pos" class="view">
+    <div class="top-buttons">
+      <button onclick="showView('home')">← 처음 화면으로</button>
+    </div>
+    <h2>주문 받기 (중앙 POS)</h2>
+    <div id="pos-session-status" class="status">세션 상태를 불러오는 중...</div>
+
+    <p>지금은 기능 테스트용으로, “테스트 주문 추가” 버튼만 있습니다.<br>
+       나중에 여기에 메뉴 버튼 / 결제 화면 / 주문번호 등을 붙일 거예요.</p>
+
+    <div class="top-buttons">
+      <button id="btn-start-session" class="primary">장사 시작</button>
+      <button id="btn-stop-session" class="danger">장사 종료</button>
+      <button id="btn-add-test-order">테스트 주문 추가</button>
+    </div>
+  </div>
+
+  <!-- 주문 확인(주방) 화면 -->
+  <div id="view-kitchen" class="view">
+    <div class="top-buttons">
+      <button onclick="showView('home')">← 처음 화면으로</button>
+    </div>
+    <h2>주문 확인하기 (주방)</h2>
+    <div id="kitchen-session-status" class="status"></div>
+    <div id="kitchen-orders" class="orders-list"></div>
+  </div>
+
+  <!-- 번호판(손님용) 화면 -->
+  <div id="view-display" class="view">
+    <div class="top-buttons">
+      <button onclick="showView('home')">← 처음 화면으로</button>
+    </div>
+    <h2>준비 완료된 주문 번호</h2>
+    <div id="display-session-status" class="status"></div>
+    <div id="display-numbers" class="display-numbers"></div>
+  </div>
+
+  <!-- Firebase & 앱 코드 -->
+  <script type="module">
+    // 1) Firebase SDK 불러오기 (버전은 콘솔에 나온 버전과 맞춰주세요)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      get,
+      set,
+      update,
+      push,
+      onValue
+    } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+
+    // 2) 여기 firebaseConfig에 Firebase 콘솔에서 복사한 설정을 그대로 붙여넣으세요.
+    const firebaseConfig = {
+      // TODO: Firebase 콘솔에서 얻은 설정 객체를 여기 넣기
+    };
+
+    // 3) Firebase 초기화
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // ====== 화면 전환 함수 ======
+    window.showView = function (key) {
+      const views = {
+        home: document.getElementById('view-home'),
+        pos: document.getElementById('view-pos'),
+        kitchen: document.getElementById('view-kitchen'),
+        display: document.getElementById('view-display')
+      };
+      Object.values(views).forEach(v => v.classList.remove('active'));
+      if (key === 'pos') views.pos.classList.add('active');
+      else if (key === 'kitchen') views.kitchen.classList.add('active');
+      else if (key === 'display') views.display.classList.add('active');
+      else views.home.classList.add('active');
+    };
+
+    // 버튼 이벤트
+    document.getElementById('btn-go-pos').addEventListener('click', () => showView('pos'));
+    document.getElementById('btn-go-kitchen').addEventListener('click', () => showView('kitchen'));
+    document.getElementById('btn-go-display').addEventListener('click', () => showView('display'));
+
+    document.getElementById('btn-start-session').addEventListener('click', startSession);
+    document.getElementById('btn-stop-session').addEventListener('click', stopSession);
+    document.getElementById('btn-add-test-order').addEventListener('click', addTestOrder);
+
+    const sessionRef = ref(db, 'session');
+    const ordersRef = ref(db, 'orders');
+
+    // ====== 세션 상태 실시간 반영 ======
+    onValue(sessionRef, (snap) => {
+      const data = snap.val();
+      const active = data?.active === true;
+      const orderNo = data?.currentOrderNumber ?? 1;
+
+      const text = active
+        ? `장사 중입니다. 다음 주문 번호: ${orderNo}번`
+        : '장사가 시작되지 않았습니다. "장사 시작" 버튼을 눌러주세요.';
+
+      document.getElementById('pos-session-status').innerText = text;
+      document.getElementById('kitchen-session-status').innerText = text;
+      document.getElementById('display-session-status').innerText = active
+        ? '장사 중입니다.'
+        : '현재 준비된 주문이 없습니다.';
+    });
+
+    // ====== 장사 시작 / 종료 ======
+    async function startSession() {
+      await set(sessionRef, {
+        active: true,
+        currentOrderNumber: 1
+      });
+      await set(ordersRef, null); // 이전 주문 기록 초기화 (테스트용)
+      alert('장사를 시작했습니다. 주문 번호는 1번부터 시작합니다.');
+    }
+
+    async function stopSession() {
+      await update(sessionRef, { active: false });
+      alert('장사를 종료했습니다.');
+    }
+
+    // ====== 테스트 주문 추가 (나중에 진짜 주문 로직으로 교체) ======
+    async function addTestOrder() {
+      const sessionSnap = await get(sessionRef);
+      const session = sessionSnap.val();
+      if (!session || !session.active) {
+        alert('먼저 "장사 시작"을 눌러주세요.');
+        return;
+      }
+      const orderNumber = session.currentOrderNumber ?? 1;
+
+      const newOrderRef = push(ordersRef);
+      await set(newOrderRef, {
+        orderNumber,
+        status: 'waiting',
+        items: ['테스트 메뉴 1개'],
+        total: 1000,
+        createdAt: Date.now()
+      });
+
+      await update(sessionRef, { currentOrderNumber: orderNumber + 1 });
+      alert(`테스트 주문 ${orderNumber}번을 추가했습니다.`);
+    }
+
+    // ====== 주방 화면: 대기 주문 실시간 표시 ======
+    onValue(ordersRef, (snap) => {
+      const container = document.getElementById('kitchen-orders');
+      container.innerHTML = '';
+
+      const orders = snap.val() || {};
+      const entries = Object.entries(orders)
+        .filter(([id, o]) => o.status === 'waiting')
+        .sort((a, b) => a[1].orderNumber - b[1].orderNumber);
+
+      if (entries.length === 0) {
+        container.innerHTML = '<p>대기 중인 주문이 없습니다.</p>';
+        return;
+      }
+
+      entries.forEach(([id, order]) => {
+        const div = document.createElement('div');
+        div.className = 'order-card';
+
+        const info = document.createElement('div');
+        info.className = 'order-info';
+        info.innerHTML = `
+          <div class="order-number">주문번호 ${order.orderNumber}</div>
+          <div>메뉴: ${order.items.join(', ')}</div>
+          <div>총액: ${order.total.toLocaleString()}원</div>
+        `;
+
+        const btn = document.createElement('button');
+        btn.className = 'primary';
+        btn.textContent = '준비완료';
+        btn.onclick = () => markDone(id);
+
+        div.appendChild(info);
+        div.appendChild(btn);
+        container.appendChild(div);
+      });
+    });
+
+    async function markDone(orderId) {
+      await update(ref(db, `orders/${orderId}`), { status: 'done' });
+    }
+
+    // ====== 번호판 화면: 완료된 주문 번호 실시간 표시 ======
+    onValue(ordersRef, (snap) => {
+      const container = document.getElementById('display-numbers');
+      container.innerHTML = '';
+
+      const orders = snap.val() || {};
+      const done = Object.values(orders)
+        .filter(o => o.status === 'done')
+        .sort((a, b) => a.orderNumber - b.orderNumber)
+        .slice(-8); // 최근 8개만
+
+      if (done.length === 0) {
+        container.textContent = '현재 준비 완료된 주문이 없습니다.';
+        return;
+      }
+
+      done.forEach(order => {
+        const span = document.createElement('span');
+        span.textContent = order.orderNumber;
+        container.appendChild(span);
+      });
+    });
+  </script>
+</body>
+</html>
